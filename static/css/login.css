@@ -18,10 +18,10 @@
         margin: 0;
         padding: 0;
       }
- 
+
       body {
         font-family: "Source Sans Pro", sans-serif;
-        background-image: url("/static/css/dist/phishing-body-removebg-preview.png");
+        background-image: url("https://24907070.fs1.hubspotusercontent-eu1.net/hubfs/24907070/the%20most%20common%20phishing%20emails.png");
         color: var(--dark-color);
 
         line-height: 1.6;
@@ -103,12 +103,6 @@
         padding: 2rem;
         
       }
-      /*===== NavBar=====*/
-      .nav-container{
-        display: flex;
-        justify-content: space-between;
-        padding: 10px;
-      }
 
       /* ===== Login Form ===== */
       .form-signin {
@@ -124,7 +118,6 @@
         transform: translateY(0);
         transition: transform 0.5s ease, box-shadow 0.5s ease;
         animation: fadeInUp 0.8s ease;
-        height:72vh;
       }
 
       .form-signin::before {
@@ -168,7 +161,7 @@
       }
 
       #logo {
-        height: 100px;
+        height: 80px;
         margin-bottom: 1.5rem;
         filter: drop-shadow(0 5px 10px rgba(106, 53, 255, 0.2));
         transition: all 0.5s ease;

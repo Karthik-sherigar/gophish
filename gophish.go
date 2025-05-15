@@ -1,30 +1,5 @@
 package main
 
-/*
-gophish - Open-Source Phishing Framework
-
-The MIT License (MIT)
-
-Copyright (c) 2013 Jordan Wright
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 import (
 	"fmt"
 	"io/ioutil"
@@ -54,25 +29,23 @@ var (
 	configPath    = kingpin.Flag("config", "Location of config.json.").Default("./config.json").String()
 	disableMailer = kingpin.Flag("disable-mailer", "Disable the mailer (for use with multi-system deployments)").Bool()
 	mode          = kingpin.Flag("mode", fmt.Sprintf("Run the binary in one of the modes (%s, %s or %s)", modeAll, modeAdmin, modePhish)).
-			Default("all").Enum(modeAll, modeAdmin, modePhish)
+				Default("all").Enum(modeAll, modeAdmin, modePhish)
 )
 
 func main() {
-	// Load the version
-
+	// Read and set the version
 	version, err := ioutil.ReadFile("./VERSION")
 	if err != nil {
 		log.Fatal(err)
 	}
 	kingpin.Version(string(version))
 
-	// Parse the CLI flags and load the config
+	// Parse command line flags
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	// Load the config
+	// Load config
 	conf, err := config.LoadConfig(*configPath)
-	// Just warn if a contact address hasn't been configured
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,57 +55,57 @@ func main() {
 	}
 	config.Version = string(version)
 
-	// Configure our various upstream clients to make sure that we restrict
-	// outbound connections as needed.
+	// Configure network restrictions for outbound traffic
 	dialer.SetAllowedHosts(conf.AdminConf.AllowedInternalHosts)
 	webhook.SetTransport(&http.Transport{
 		DialContext: dialer.Dialer().DialContext,
 	})
 
+	// Setup logger
 	err = log.Setup(conf.Logging)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Provide the option to disable the built-in mailer
-	// Setup the global variables and settings
+	// Setup DB and global models
 	err = models.Setup(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Unlock any maillogs that may have been locked for processing
-	// when Gophish was last shutdown.
+	// Unlock all mail logs (in case of crash)
 	err = models.UnlockAllMailLogs()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Create our servers
+	// Initialize admin and phishing servers
 	adminOptions := []controllers.AdminServerOption{}
 	if *disableMailer {
 		adminOptions = append(adminOptions, controllers.WithWorker(nil))
 	}
-	adminConfig := conf.AdminConf
-	adminServer := controllers.NewAdminServer(adminConfig, adminOptions...)
-	middleware.Store.Options.Secure = adminConfig.UseTLS
 
-	phishConfig := conf.PhishConf
-	phishServer := controllers.NewPhishingServer(phishConfig)
+	adminServer := controllers.NewAdminServer(conf.AdminConf, adminOptions...)
+	middleware.Store.Options.Secure = conf.AdminConf.UseTLS
+
+	phishServer := controllers.NewPhishingServer(conf.PhishConf)
 
 	imapMonitor := imap.NewMonitor()
-	if *mode == "admin" || *mode == "all" {
+
+	// Start servers based on mode
+	if *mode == modeAdmin || *mode == modeAll {
 		go adminServer.Start()
 		go imapMonitor.Start()
 	}
-	if *mode == "phish" || *mode == "all" {
+	if *mode == modePhish || *mode == modeAll {
 		go phishServer.Start()
 	}
 
-	// Handle graceful shutdown
+	// Graceful shutdown
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
+
 	log.Info("CTRL+C Received... Gracefully shutting down servers")
 	if *mode == modeAdmin || *mode == modeAll {
 		adminServer.Shutdown()
@@ -141,5 +114,4 @@ func main() {
 	if *mode == modePhish || *mode == modeAll {
 		phishServer.Shutdown()
 	}
-
 }
